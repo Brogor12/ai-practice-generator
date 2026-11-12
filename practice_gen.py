@@ -106,7 +106,7 @@ def build_prompt(subject, topic, difficulty, count, weak=None):
 def call_claude(prompt, model=DEFAULT_MODEL, api_key=None):
     api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        sys.exit("Set ANTHROPIC_API_KEY first (or use --dry-run).")
+        raise RuntimeError("Set ANTHROPIC_API_KEY first (or use --dry-run).")
     body = json.dumps({
         "model": model,
         "max_tokens": 2000,
@@ -121,7 +121,7 @@ def call_claude(prompt, model=DEFAULT_MODEL, api_key=None):
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.load(resp)
     except urllib.error.HTTPError as e:
-        sys.exit(f"API error {e.code}: {e.read().decode()[:300]}")
+        raise RuntimeError(f"API error {e.code}: {e.read().decode()[:300]}") from e
     return "".join(b.get("text", "") for b in data.get("content", []))
 
 
@@ -178,7 +178,10 @@ def cmd_generate(args):
     if args.dry_run:
         print(f"[dry run] difficulty={difficulty}\n{prompt}")
         return
-    problems = parse_problems(call_claude(prompt))
+    try:
+        problems = parse_problems(call_claude(prompt))
+    except (RuntimeError, ValueError) as e:
+        sys.exit(str(e))
     ws, key = save_worksheet(
         args.student, args.topic,
         render_worksheet(args.student, args.topic, difficulty, problems),
